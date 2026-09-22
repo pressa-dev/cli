@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 import { authCommand } from './commands/auth.js';
 import { compileCommand } from './commands/compile.js';
 import { usageCommand } from './commands/usage.js';
+import { templatesCommand } from './commands/templates.js';
+import { assetsCommand } from './commands/assets.js';
+import { renderCommand } from './commands/render.js';
 
 process.on('unhandledRejection', (err) => {
   console.error('Fatal:', err instanceof Error ? err.message : err);
@@ -24,5 +27,8 @@ program
 program.addCommand(authCommand);
 program.addCommand(compileCommand);
 program.addCommand(usageCommand);
+program.addCommand(templatesCommand);
+program.addCommand(assetsCommand);
+program.addCommand(renderCommand);
 
 program.parse();

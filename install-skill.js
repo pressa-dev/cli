@@ -27,10 +27,7 @@ try {
   }
 
   const target = join(skillDir, "SKILL.md");
-  if (existsSync(target)) {
-    // Don't overwrite user's customizations
-    process.exit(0);
-  }
+  // Always install latest SKILL.md (updates are important for correct plan info)
 
   // Create ~/.claude/skills/pressa/ if it doesn't exist
   mkdirSync(skillDir, { recursive: true, mode: 0o700 });

@@ -3,6 +3,12 @@ import chalk from 'chalk';
 import { getApiKey, getApiUrl } from '../config.js';
 import { PressaAPI, ApiError } from '../api.js';
 
+function formatBytes(bytes: number): string {
+  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(0)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
 export const usageCommand = new Command('usage')
   .description('Show your API usage statistics')
   .option('-u, --url <url>', 'API base URL override')
@@ -51,6 +57,23 @@ export const usageCommand = new Command('usage')
       console.log(`Used:    ${chalk.bold(String(resp.usage.compilations_this_month))}/${limit} this month`);
       console.log(`Resets:  ${resetsAt}`);
       console.log(`API Key: ${keyDisplay}`);
+
+      // Show limits
+      if (resp.limits) {
+        console.log('');
+        console.log(chalk.dim('Limits:'));
+        console.log(`  Pages/doc:   ${resp.limits.max_pages_per_document}`);
+        console.log(`  Source size: ${formatBytes(resp.limits.max_latex_bytes_per_document)}`);
+        console.log(`  PDF size:    ${formatBytes(resp.limits.max_pdf_bytes_per_document)}`);
+        console.log(`  Timeout:     ${resp.limits.compile_timeout_seconds}s`);
+        console.log(`  Compilers:   ${resp.limits.allowed_compilers.join(', ')}`);
+      }
+
+      // Show templates
+      if (resp.templates) {
+        const tLimit = resp.templates.limit === null ? 'unlimited' : String(resp.templates.limit);
+        console.log(`  Templates:   ${resp.templates.count}/${tLimit}`);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(chalk.red(`Error: ${message}`));
