@@ -1,0 +1,64 @@
+name: Publish
+
+# Publishes @pressa/cli to npm when a version tag (v0.8.1) is pushed. The tag
+# comes from script/release_package.sh in the private monorepo, which syncs
+# this repo first. This file lives in the monorepo under cli/.github/ so the
+# sync carries it over instead of deleting it.
+#
+# There are no stored secrets. npm accepts the publish through Trusted
+# Publishing (npmjs.com -> @pressa/cli -> Settings -> Trusted Publisher:
+# pressa-dev / cli / publish.yml), which exchanges this run's id-token for a
+# token that lives for minutes, and adds provenance by itself.
+#
+# A version that is already on npm is skipped, so re-running a run is safe.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+env:
+  PACKAGE: "@pressa/cli"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      # Trusted Publishing needs npm 11.5.1 or later.
+      - run: npm install -g npm@latest
+
+      - name: Tag matches package.json
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          PKG_VERSION="$(node -p 'require("./package.json").version')"
+          if [ "$PKG_VERSION" != "$VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match version $PKG_VERSION in package.json"
+            exit 1
+          fi
+
+      - run: npm install --no-audit --no-fund
+
+      - run: npm run build
+
+      - name: Publish to npm
+        run: |
+          if npm view "$PACKAGE@$VERSION" version >/dev/null 2>&1; then
+            echo "$PACKAGE@$VERSION is already on npm, skipping."
+          else
+            npm publish --access public
+          fi
