@@ -1,6 +1,6 @@
 {
   "name": "@pressa/cli",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "CLI for Pressa - Compile-as-a-Service. LaTeX in, PDF out.",
   "bin": {
     "pressa": "./dist/index.js"

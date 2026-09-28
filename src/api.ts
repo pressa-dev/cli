@@ -92,6 +92,7 @@ export interface TemplateListItem {
   updated_at: string;
   latex_size_bytes: number;
   has_instructions: boolean;
+  placeholder_engine: 'liquid' | null;
 }
 
 export interface TemplateListResponse {
@@ -106,11 +107,21 @@ export interface TemplateResponse {
   instructions: string | null;
   updated_at: string;
   latex_size_bytes: number;
+  placeholder_engine: 'liquid' | null;
+  // Present only on placeholder templates: the fields `pressa render` expects.
+  schema?: Record<string, unknown>;
+  version?: number;
 }
+
+// 'liquid': placeholder template filled by `pressa render`. 'none': raw LaTeX
+// whose braces only look like placeholders. Omitted: keep the template's kind.
+export type PlaceholderEngine = 'liquid' | 'none';
 
 export interface TemplateSaveResponse {
   template: TemplateResponse;
   created: boolean;
+  // True when this call converted a raw LaTeX template to a placeholder one.
+  promoted: boolean;
 }
 
 export interface Asset {
@@ -254,10 +265,12 @@ export class PressaAPI {
     latexContent: string,
     description?: string,
     instructions?: string,
+    placeholderEngine?: PlaceholderEngine,
   ): Promise<TemplateSaveResponse> {
     const body: Record<string, string> = { name, latex_content: latexContent };
     if (description) body.description = description;
     if (instructions !== undefined) body.instructions = instructions;
+    if (placeholderEngine) body.placeholder_engine = placeholderEngine;
     return this.request('POST', '/api/v1/templates', body) as Promise<TemplateSaveResponse>;
   }
 

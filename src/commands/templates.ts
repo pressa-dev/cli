@@ -1,9 +1,32 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import chalk from 'chalk';
 import { readFileSync } from 'node:fs';
 import { writeFileSync } from 'node:fs';
-import { PressaAPI, ApiError } from '../api.js';
+import { PressaAPI, ApiError, type PlaceholderEngine } from '../api.js';
 import { getApiKey, getApiUrl } from '../config.js';
+
+// A refused save (422) carries a sentence saying what is wrong and, for the
+// placeholder checks, what to do next. Print those instead of the bare error
+// code. The server's `agent_hint` speaks API parameters; the CLI flag is
+// --engine, so the two engine refusals get their own wording.
+function printRefusal(body: Record<string, unknown>): void {
+  const message = typeof body.message === 'string' ? body.message : String(body.error ?? 'Save refused.');
+  console.error(chalk.red(`Error: ${message}`));
+
+  if (body.error === 'liquid_placeholders_in_v1_template') {
+    console.error(chalk.cyan('Re-run with --engine liquid if these are placeholders, or --engine none if they are literal LaTeX.'));
+  } else if (body.error === 'engine_downgrade_not_supported') {
+    console.error(chalk.cyan('Re-run without --engine to update it, or save the raw LaTeX under a new name.'));
+  } else if (typeof body.agent_hint === 'string') {
+    console.error(chalk.cyan(body.agent_hint));
+  }
+
+  if (Array.isArray(body.fields)) {
+    for (const field of body.fields as Array<Record<string, unknown>>) {
+      if (typeof field.message === 'string') console.error(chalk.dim(`  - ${field.message}`));
+    }
+  }
+}
 
 function getApi(urlOverride?: string): PressaAPI {
   const apiKey = getApiKey();
@@ -128,11 +151,25 @@ export const templatesCommand = new Command('templates')
       .option('-d, --description <desc>', 'Template description')
       .option('-i, --instructions <text>', 'Prose markdown rules for AI agents on how to fill this template')
       .option('--instructions-file <file>', 'Read instructions prose from a markdown file')
+      .addOption(
+        new Option(
+          '-e, --engine <kind>',
+          'liquid: the file has {{ placeholders }} filled by `pressa render` (converts an existing raw LaTeX ' +
+            'template in place). none: raw LaTeX whose braces only look like placeholders. Omit to keep the ' +
+            "template's current kind.",
+        ).choices(['liquid', 'none']),
+      )
       .option('-u, --url <url>', 'API base URL override')
       .action(async (
         name: string,
         file: string,
-        options: { description?: string; instructions?: string; instructionsFile?: string; url?: string },
+        options: {
+          description?: string;
+          instructions?: string;
+          instructionsFile?: string;
+          engine?: PlaceholderEngine;
+          url?: string;
+        },
       ) => {
         try {
           let latex: string;
@@ -163,9 +200,11 @@ export const templatesCommand = new Command('templates')
           }
 
           const api = getApi(options.url);
-          const result = await api.saveTemplate(name, latex, options.description, instructions);
+          const result = await api.saveTemplate(name, latex, options.description, instructions, options.engine);
 
-          const action = result.created ? 'Created' : 'Updated';
+          const action = result.promoted
+            ? 'Converted to a placeholder template:'
+            : result.created ? 'Created' : 'Updated';
           let instructionsNote = '';
           if (instructions !== undefined) {
             instructionsNote = instructions === ''
@@ -173,6 +212,10 @@ export const templatesCommand = new Command('templates')
               : chalk.cyan(' (with instructions)');
           }
           console.log(chalk.green('\u2713') + ` ${action} template "${result.template.name}"${instructionsNote}`);
+          if (result.template.placeholder_engine === 'liquid' && result.template.schema) {
+            const fields = (result.template.schema.required as string[] | undefined) ?? [];
+            console.log(chalk.dim(`  Render with: pressa render "${result.template.name}" (fields: ${fields.join(', ') || 'none'})`));
+          }
         } catch (err) {
           if (err instanceof ApiError) {
             if (err.status === 401) {
@@ -190,6 +233,10 @@ export const templatesCommand = new Command('templates')
                 console.error(chalk.red('Error: Saved templates require a paid plan.'));
                 console.error(chalk.cyan('Upgrade: https://pressa.dev/pricing'));
               }
+              process.exit(1);
+            }
+            if (err.status === 422) {
+              printRefusal(err.body);
               process.exit(1);
             }
           }

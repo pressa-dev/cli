@@ -44,6 +44,8 @@ Example: the user uploads a PDF with a company logo and asks you to recreate it.
 
 **Saved Templates (paid plans):** If the user wants to save their document for reuse, call `save_template` with a name and the LaTeX source. Next time, use `list_templates` to find it and `get_template` to load it. Modify the LaTeX as needed and recompile.
 
+**Placeholder templates:** If the same document is produced repeatedly with different values (an invoice per client), mark the changing values as Liquid placeholders (`{{ amount }}`, `{{ client.name }}`) and save with `placeholder_engine: "liquid"` (CLI: `pressa templates save <name> <file> --engine liquid`). Then fill it with `render` and JSON data instead of editing the LaTeX. The same call converts an existing raw LaTeX template in place. Without it, a source containing `{{ }}` or `{% %}` is refused, because raw LaTeX would print the braces in the PDF; use `"none"` only when those braces are literal LaTeX.
+
 **Template Instructions (optional, recommended for dynamic templates):** When you `save_template`, you can attach an optional `instructions` string (prose markdown, up to 50000 characters) describing how the template should be filled in. The LaTeX source captures how the document looks; instructions capture how it gets populated - defaults, workflow rules, conditional logic, edge cases.
 
 Use `instructions` when the template has dynamic parts the user will not always re-specify. Skip it when the template is fully static and the LLM only swaps in user-provided text.
