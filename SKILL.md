@@ -31,16 +31,13 @@ If the `compile` MCP tool is available, use it directly:
 3. Share the PDF download URL from the response with the user
 4. If compilation fails, fix the LaTeX and retry
 
-**Images, logos, signatures (`assets` parameter):** If the document needs a logo, photo, signature, diagram, or embedded PDF, pass it in the optional `assets` parameter as a map of filename to base64-encoded binary. Reference each file in the LaTeX by the same filename via `\includegraphics{filename.png}` (remember `\usepackage{graphicx}`). Supported formats: PNG, JPG, JPEG, PDF, SVG.
+**Images, logos, signatures:** Reference each file in the LaTeX by filename via `\includegraphics{logo.png}` (remember `\usepackage{graphicx}`). Supported formats: PNG, JPG, JPEG, PDF, SVG. Never write a file the user gives you (photo, logo, signature) out as base64: it costs about 1.8 tokens per character, so a 30 KB photo is about 75,000 tokens and a phone photo is impossible, and one wrong character corrupts it. Instead:
 
-Example: the user uploads a PDF with a company logo and asks you to recreate it. Extract the logo as PNG, base64-encode it, then call `compile` with:
+1. Call `create_asset_upload({ name: "logo.png" })` (paid plans). It returns `upload_url` and `upload_command`.
+2. With a shell and the file on disk, run `upload_command` with the file path (`curl -sS -T ./logo.png '<upload_url>'`). Without a shell, give the user `upload_url`; they pick the file on that page and tell you when it is done.
+3. Call `compile` with `use_stored_assets: ["logo.png"]`. Uploading again under the same name replaces the file, e.g. a new profile photo.
 
-```
-{
-  "latex": "\\documentclass{article}\\usepackage{graphicx}\\begin{document}\\includegraphics{logo.png}...\\end{document}",
-  "assets": { "logo.png": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB..." }
-}
-```
+The `assets` parameter (map of filename to base64) is only for small one-off files you already hold as base64, about 30 KB at most.
 
 **Saved Templates (paid plans):** If the user wants to save their document for reuse, call `save_template` with a name and the LaTeX source. Next time, use `list_templates` to find it and `get_template` to load it. Modify the LaTeX as needed and recompile.
 
@@ -64,14 +61,15 @@ When you later call `get_template`, the response includes both `latex_content` a
 
 `description` (max 500 chars) is a human-readable one-line summary for UI lists. `instructions` is the LLM playbook. They are different fields, do not conflate them.
 
-**Asset Library (paid plans, persistent across compiles):** When the user will reuse the same binary file (logo, signature, letterhead) across many future documents, do NOT re-encode the bytes on every compile. Save it once to the user's asset library via `save_asset` and from then on pass `use_stored_assets: ["name"]` to `compile` instead. Four tools manage the library:
+**Asset Library (paid plans, persistent across compiles):** Files saved once and named in `use_stored_assets` on every compile. Tools:
 
-- `save_asset(name, content_base64, content_type?)` - upload or update a file by name. Paid plans only.
+- `create_asset_upload(name)` - one-time link that saves or replaces a file by name; the bytes go by `curl` or a browser page, never through you. Use this for any file the user gives you.
+- `save_asset(name, content_base64, content_type?)` - save a small file you already hold as base64 (about 30 KB at most).
 - `list_assets()` - return the full library plus quota (count, total_bytes, remaining_bytes). Takes no parameters.
 - `get_asset(id_or_name)` - fetch metadata plus base64 content.
 - `delete_asset(id_or_name)` - remove an asset.
 
-**Reusable brand workflow:** User asks for a monthly invoice with their company logo. First time, you extract the logo from whatever they upload, base64-encode it, and call `save_asset({ name: "logo.png", content_base64: "..." })`. Then on this compile and every future compile, pass `use_stored_assets: ["logo.png"]` instead of `assets: {"logo.png": "..."}` - the server loads the bytes from storage. The LaTeX still references `\includegraphics{logo.png}` normally. This keeps the request payload small, cuts round-trip overhead, and lets the same logo flow into contracts, reports, and certificates without repeating work.
+The CLI equivalent of the upload link is `pressa assets upload <file> --name <name>`.
 
 This is the simplest method - no file creation needed, no CLI setup required.
 

@@ -60,5 +60,5 @@ jobs:
           if npm view "$PACKAGE@$VERSION" version >/dev/null 2>&1; then
             echo "$PACKAGE@$VERSION is already on npm, skipping."
           else
-            npm publish --access public
+            npm publish --access public --loglevel verbose
           fi
