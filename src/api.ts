@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 export interface CompileResponse {
   job_id: string;
   pdf_url: string;
@@ -159,6 +161,12 @@ export class ApiError extends Error {
   }
 }
 
+// "pressa-cli/0.8.3": tells the server a compile came through the CLI
+// (CompileChannel), which a bare HTTP call cannot say any other way.
+const USER_AGENT = `pressa-cli/${(JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf-8'),
+) as { version: string }).version}`;
+
 export class PressaAPI {
   /**
    * `apiKey` may be null. A null key means anonymous mode: no Authorization
@@ -312,6 +320,7 @@ export class PressaAPI {
 
     const headers: Record<string, string> = {
       'Accept': 'application/json',
+      'User-Agent': USER_AGENT,
     };
 
     // Omit the header entirely when anonymous. Sending an empty or bogus

@@ -55,6 +55,13 @@ jobs:
 
       - run: npm run build
 
+      # Packs the package, checks the bin is executable in the tarball, then
+      # installs it fresh and over the version on npm and starts it. 0.11.0
+      # passed its tests and still could not start once installed
+      # ("Permission denied"); this stops such a package here.
+      - name: Install and start the package as users get it
+        run: node scripts/smoke-package.mjs
+
       - name: Publish to npm
         run: |
           if npm view "$PACKAGE@$VERSION" version >/dev/null 2>&1; then
@@ -62,3 +69,19 @@ jobs:
           else
             npm publish --access public --loglevel verbose
           fi
+
+      - name: Wait for npm to serve the version
+        run: |
+          for i in $(seq 1 30); do
+            if [ "$(npm view "$PACKAGE@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::npm did not serve $PACKAGE@$VERSION within 10 minutes"
+          exit 1
+
+      # The version npm now serves, installed and started like a user would.
+      - name: Install and start the published version
+        run: node scripts/smoke-package.mjs --registry "$VERSION"
+
